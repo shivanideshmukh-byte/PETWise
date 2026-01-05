@@ -185,7 +185,8 @@ def answer_engine(q):
 
 if st.button("Ask"):
 
-    ans = answer_engine(user_question)
+   ans = answer_engine(question)
+
 
     st.markdown("### 🎯 Diva says:")
     st.success(ans)
