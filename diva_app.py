@@ -82,10 +82,7 @@ def listen_voice():
         except:
             return "Could not understand."
 
-def speak(text):
-    engine=pyttsx3.init()
-    engine.say(text)
-    engine.runAndWait()
+
 
 # --------- CHAT UI ---------
 st.subheader("💬 Ask Diva")
@@ -99,7 +96,7 @@ if mode=="Text":
         ans=diva_answer(q)
         st.write("🧠 Diva:",ans)
         save_secure("user",q,ans)
-        speak(ans)
+       
 
 else:
     if st.button("🎤 Speak now"):
@@ -108,7 +105,7 @@ else:
         ans=diva_answer(q)
         st.write("🧠 Diva:",ans)
         save_secure("user",q,ans)
-        speak(ans)
+       
 
 # --------- GIS MAP ---------
 st.subheader("🗺 Hyderabad GIS Demo Map")
