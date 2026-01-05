@@ -4,6 +4,7 @@ import json
 import pandas as pd
 import re
 import math
+import requests
 from cryptography.fernet import Fernet
 
 st.set_page_config(page_title="Diva AI", layout="wide")
@@ -41,11 +42,6 @@ LOGIN_URL = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassw
 def firebase_signup(email, password):
     payload = {"email": email, "password": password, "returnSecureToken": True}
     r = requests.post(SIGNUP_URL, data=payload)
-    return r.json()
-
-def firebase_login(email, password):
-    payload = {"email": email, "password": password, "returnSecureToken": True}
-    r = requests.post(LOGIN_URL, data=payload)
     return r.json()
 
 # -------------------------------------------------------------------------------------
