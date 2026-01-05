@@ -122,11 +122,68 @@ def main_app():
 
     user_question = st.text_input("Ask Diva anything about PET, waste, or AQI:")
 
-    if st.button("Ask"):
-        if "plastic" in user_question.lower() or "aqi" in user_question.lower() or "waste" in user_question.lower():
-            ans = "This question is environmental-related, and Diva will soon answer using verified PET & AQI datasets."
-        else:
-            ans = "❌ I am domain restricted. I only answer environmental questions."
+   import re
+import math
+
+def forecast_pet(year):
+    base_year = 2025
+    base_value = 145000  # tonnes/year (baseline estimate – can be updated later)
+    growth_rate = 0.065   # 6.5% annual growth estimate
+    years = year - base_year
+    return round(base_value * ((1 + growth_rate) ** years), 2)
+
+def answer_engine(q):
+
+    ql = q.lower()
+
+    # -----------------------------
+    # Identify year in question
+    # -----------------------------
+    year_match = re.findall(r"(20[2-5][0-9])", ql)
+
+    # -----------------------------
+    # PET / plastic forecast question
+    # -----------------------------
+    if any(k in ql for k in ["pet", "plastic", "waste"]):
+
+        if year_match:
+            y = int(year_match[0])
+            value = forecast_pet(y)
+            return f"Estimated PET waste in {y} is **{value:,} tonnes per year** (trend-based forecast)."
+
+        if "why" in ql or "reason" in ql or "increase" in ql:
+            return "PET waste is increasing mainly due to population growth, urbanisation, lifestyle change, high packaging use, and limited recycling capacity."
+
+        if "current" in ql or "now" in ql:
+            return "Current PET waste generation in Hyderabad is approximately **145,000–160,000 tonnes/year** based on recent estimates."
+
+        return "This relates to PET/plastic waste. You can ask for a specific year forecast or ask why/how for an explanation."
+
+    # -----------------------------
+    # AQI questions
+    # -----------------------------
+    if "aqi" in ql or "air quality" in ql:
+
+        if "meaning" in ql or "what is" in ql:
+            return "AQI (Air Quality Index) indicates pollution level: 0–50 Good, 51–100 Satisfactory, 101–200 Moderate, 201–300 Poor, 301–400 Very Poor, >400 Severe."
+
+        return "Diva can provide AQI insights. Live AQI API integration can be enabled in the next phase."
+
+    # -----------------------------
+    # Non-domain questions
+    # -----------------------------
+    return "❌ I am domain-restricted. Diva answers only PET waste, plastic waste, recycling, and AQI questions."
+
+
+if st.button("Ask"):
+
+    ans = answer_engine(user_question)
+
+    st.write("🧠 Diva:", ans)
+
+    tts(ans)
+
+    add_chat(user_question + " -> " + ans)
 
         st.write("🧠 Diva:", ans)
         tts(ans)
