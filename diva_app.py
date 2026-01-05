@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import re
 from cryptography.fernet import Fernet
-import speech_recognition as sr
+
 
 st.set_page_config(page_title="Diva AI", layout="wide")
 
@@ -51,13 +51,11 @@ def tts(text):
     """
     st.components.v1.html(js)
 
-# ---------------- VOICE INPUT ----------------
+# ---------------- VOICE INPUT (TEMP DISABLED) ----------------
 def voice_input():
-    r = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.info("🎙 Speak now...")
-        audio = r.listen(source, phrase_time_limit=5)
-    return r.recognize_google(audio)
+    st.warning("🎙 Voice input will be available soon. Please type your question.")
+    return ""
+
 
 # ---------------- AQI LIVE ----------------
 def get_aqi(city):
