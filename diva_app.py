@@ -43,6 +43,16 @@ def firebase_signup(email, password):
     payload = {"email": email, "password": password, "returnSecureToken": True}
     r = requests.post(SIGNUP_URL, data=payload)
     return r.json()
+def firebase_login(email, password):
+    payload = {
+        "email": email,
+        "password": password,
+        "returnSecureToken": True
+    }
+
+    r = requests.post(LOGIN_URL, data=payload)
+
+    return r.json()
 
 # -------------------------------------------------------------------------------------
 # 💾 secure encrypted chat store per user
