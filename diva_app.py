@@ -76,7 +76,8 @@ def login_page():
             if "idToken" in result:
                 st.session_state["user"] = email
                 st.success("Login successful 🎉")
-                st.experimental_rerun()
+                st.rerun()
+
             else:
                 st.error(result.get("error", {}).get("message", "Login failed"))
 
