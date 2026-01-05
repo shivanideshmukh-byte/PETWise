@@ -30,7 +30,8 @@ if not st.session_state.logged:
     if st.button("Login"):
         if u in users and users[u]==p:
             st.session_state.logged=True
-            st.experimental_rerun()
+            st.rerun()
+
         else:
             st.error("Invalid login")
     st.stop()
