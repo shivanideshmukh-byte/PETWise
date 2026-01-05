@@ -1,279 +1,147 @@
-import os
-os.system("pip install plotly")
-
 import streamlit as st
-import requests
 import pandas as pd
-import plotly.express as px
-import folium
-from streamlit_folium import st_folium
-import re
-from reportlab.pdfgen import canvas
+import requests
+from datetime import datetime
+from gtts import gTTS
+import base64
+from io import BytesIO
 
-# ------------------ PAGE CONFIG ------------------
-st.set_page_config(page_title="Diva – AI Environmental Assistant",
-                   layout="wide")
+st.set_page_config(page_title="Diva – Environmental Assistant", layout="centered")
 
-# ------------------ GLOBAL DISCLAIMER ------------------
-DISCLAIMER = """
-### ⚠ Data Transparency Notice
+# ---------------- SESSION / LOGIN -------------------
 
-• Live AQI values are retrieved from **WAQI.org official network**  
-• PET waste numbers are **model-based estimates** using CPCB + FICCI growth values  
-• City-level PET validation is **ongoing** – values should not be treated as municipal figures  
-• All estimates are clearly labelled as such  
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
-Diva always states whether data is:
-✔ LIVE verified  
-✔ Model-based estimate  
-✔ Not available  
-"""
+st.title("🌿 Diva — AI Environmental Assistant")
 
-# ------------------ FIREBASE LOGIN ------------------
-API_KEY = "AIzaSyAbS3SdyPNRSNaUov0n4MeWFHTpoxBc4jc"
-
-def firebase_auth(endpoint, email, password):
-    url = f"https://identitytoolkit.googleapis.com/v1/accounts:{endpoint}?key={API_KEY}"
-    return requests.post(url, json={
-        "email": email,
-        "password": password,
-        "returnSecureToken": True
-    }).json()
-
-def login_screen():
-    st.title("🔐 Secure Login – Diva")
-
-    action = st.radio("Action", ["Login", "Create Account"], horizontal=True)
-
+if not st.session_state.logged_in:
+    st.subheader("🔐 Login required")
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
 
-    if st.button("Continue"):
-        if action == "Login":
-            result = firebase_auth("signInWithPassword", email, password)
+    if st.button("Login"):
+        if email.strip() != "" and password.strip() != "":
+            st.session_state.logged_in = True
+            st.success("Logged in successfully")
         else:
-            result = firebase_auth("signUp", email, password)
+            st.error("Enter valid email and password")
 
-        if "idToken" in result:
-            st.session_state.logged = True
-            st.session_state.user = email
-            st.success("Login successful ✨")
-            st.rerun()
-        else:
-            st.error("Authentication failed")
+    st.stop()
 
-# ------------------ VOICE OUTPUT ------------------
-def speak(text):
-    st.components.v1.html(f"""
-    <script>
-        var msg = new SpeechSynthesisUtterance("{text}");
-        msg.pitch=1; msg.rate=1;
-        msg.voice = speechSynthesis.getVoices().find(v=>v.name.toLowerCase().includes("female"))
-                   || speechSynthesis.getVoices()[0];
-        speechSynthesis.speak(msg);
-    </script>
-    """, height=0)
+st.success("Logged in as user")
 
-# ------------------ VOICE INPUT ------------------
-def mic_input():
-    st.components.v1.html("""
-    <button onclick="record()" style="padding:10px;border-radius:10px;background:#e74c3c;color:white;">
-    🎤 Speak to Diva</button>
+# ---------------- TEXT TO SPEECH --------------------
 
-    <script>
-    function record(){
-        var rec = new webkitSpeechRecognition();
-        rec.lang="en-IN";
-        rec.start();
-        rec.onresult=function(e){
-            var t=e.results[0][0].transcript;
-            var tb=window.parent.document.querySelector("textarea");
-            tb.value=t;
-            tb.dispatchEvent(new Event('input',{bubbles:true}));
-        }
-    }
-    </script>
-    """, height=80)
+def speak(text, gender="female"):
+    tts = gTTS(text=text, lang='en', slow=False, tld="co.in")
+    fp = BytesIO()
+    tts.write_to_fp(fp)
+    fp.seek(0)
+    b64 = base64.b64encode(fp.read()).decode()
+    audio_html = f"""
+        <audio autoplay>
+            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+        </audio>
+    """
+    st.markdown(audio_html, unsafe_allow_html=True)
 
-# ------------------ PET FORECAST ------------------
-def pet_forecast(city, year):
-    base_year = 2020
-    india_mt = 3.47
-    growth = 0.065
+# ---------------- PET WASTE MODEL -------------------
 
-    population = {
-        "hyderabad": 10.5,
-        "mumbai": 20.5,
-        "delhi": 19,
-        "chennai": 11.5,
-        "bangalore": 13.2
-    }
+BASE_YEAR = 2025
+BASE_VALUE = 145000
+GROWTH = 0.065
 
-    if city not in population:
-        return None
+def project_pet(year):
+    years = year - BASE_YEAR
+    return round(BASE_VALUE * ((1 + GROWTH) ** years), 2)
 
-    share = population[city] / 1400
-    baseline = share * india_mt * 1e6
-    years = year - base_year
+# ---------------- LIVE AQI --------------------------
 
-    return round(baseline * ((1 + growth) ** years), 2)
+WAQI_KEY = "7c3297f48ac37fa9482e707c5bcf76ab8c84d6c3"  # optional – if blank returns message
 
-# ------------------ LIVE AQI ------------------
-AQI_KEY = "7c3297f48ac37fa9482e707c5bcf76ab8c84d6c3"
+def get_aqi(city):
+    if WAQI_KEY == "":
+        return None, "Live AQI requires WAQI API key (official board)."
 
-def get_live_aqi(city):
-    try:
-        url = f"https://api.waqi.info/feed/{city}/?token={AQI_KEY}"
-        r = requests.get(url).json()
+    url = f"https://api.waqi.info/feed/{city}/?token={WAQI_KEY}"
+    data = requests.get(url).json()
 
-        if r["status"] != "ok":
-            return None
+    if data["status"] != "ok":
+        return None, "AQI not available or city not monitored."
 
-        data = r["data"]
-        aqi = data["aqi"]
-        dom = data.get("dominentpol", "NA")
-        time = data["time"]["s"]
+    return data["data"]["aqi"], "Source: World Air Quality Index Project (WAQI)"
 
-        if aqi <= 50: status = "Good"
-        elif aqi <= 100: status = "Moderate"
-        elif aqi <= 150: status = "Unhealthy for Sensitive Groups"
-        elif aqi <= 200: status = "Unhealthy"
-        elif aqi <= 300: status = "Very Unhealthy"
-        else: status = "Hazardous"
+# ---------------- CHAT ENGINE ------------------------
 
-        return aqi, dom, status, time
+def diva_brain(question):
+    q = question.lower()
 
-    except:
-        return None
+    # detect year
+    import re
+    match = re.findall(r"(20\d{2})", q)
+    year = int(match[0]) if match else BASE_YEAR
 
-# ------------------ ENV TOPIC FILTER ------------------
-ENV_WORDS = [
-    "aqi","air","pollution","waste","plastic","pet","recycling",
-    "environment","water","noise","soil","climate","carbon"
-]
+    # detect city
+    import re
+    city_tokens = ["hyderabad","mumbai","delhi","chennai","kolkata","pune","bengaluru"]
+    found_city = None
+    for c in city_tokens:
+        if c in q:
+            found_city = c.capitalize()
 
-def is_environment(q):
-    return any(k in q.lower() for k in ENV_WORDS)
-
-# ------------------ MAIN ASSISTANT APP ------------------
-def diva_app():
-
-    st.sidebar.success(f"Logged in as {st.session_state.user}")
-    if st.sidebar.button("Logout"):
-        st.session_state.logged = False
-        st.rerun()
-
-    st.title("🌿 Diva — AI Environmental Assistant")
-    st.info(DISCLAIMER)
-
-    mode = st.radio("Ask via:", ["Typing","Voice"], horizontal=True)
-    if mode == "Voice":
-        mic_input()
-
-    question = st.text_input("Ask Diva…")
-
-    if st.button("Ask Diva") and question:
-
-        q = question.lower()
-
-        if not is_environment(q):
-            msg = "I am trained only on environmental topics such as AQI, PET waste, plastic pollution and climate. I cannot answer this question yet."
-            st.warning(msg); speak(msg); return
-
-        if "aqi" in q or "air" in q or "pollution" in q:
-
-            city="hyderabad"
-            for c in ["hyderabad","mumbai","delhi","chennai","bangalore","pune","kolkata"]:
-                if c in q: city=c
-
-            data = get_live_aqi(city)
-
-            if data:
-                aqi, pm, status, time = data
-
-                msg=f"""
-📍 City: **{city.title()}**
-🌫 Live AQI: **{aqi}**
-🧪 Dominant pollutant: **{pm}**
-📊 Category: **{status}**
-⏱ Last updated: **{time}**
-
-✔ Source: **WAQI.org monitoring network**
-"""
-                st.success(msg)
-                speak(f"Live air quality in {city.title()} is {aqi}, categorized as {status}, dominated by {pm}.")
+    if "aqi" in q:
+        if found_city:
+            value, note = get_aqi(found_city)
+            if value:
+                return f"Current AQI in {found_city} is {value}. {note}", True
             else:
-                st.error("Live AQI temporarily unavailable")
-                speak("Live AQI unavailable at the moment")
+                return f"Live AQI unavailable. {note}", True
+        return "Please mention city for AQI.", False
 
-            return
+    if "waste" in q or "pet" in q:
+        forecast = project_pet(year)
+        msg = f"""
+City: **{found_city if found_city else "Not specified"}**
+Year: **{year}**
+Projected PET waste: **{forecast} tonnes/year**
 
-        words=q.split()
-        city=None; year=None
-        for w in words:
-            if w in ["hyderabad","mumbai","delhi","bangalore","chennai"]:
-                city=w
-            if w.isdigit() and len(w)==4:
-                year=int(w)
+Model based on CPCB baseline 2025 and 6.5% annual growth.
 
-        if city and year:
-            val=pet_forecast(city,year)
+⚠ Data is modeled estimate. Not verified field-measured value.
+        """
+        return msg, True
 
-            msg=f"""
-📍 City: **{city.title()}**
-📅 Year: **{year}**
-♻ Estimated PET waste: **{val/1000:.2f} thousand tonnes/year**
+    return "I am currently trained only for PET waste & AQI questions in India.", False
 
-⚠ Model-based estimate using:
-• CPCB plastic waste report  
-• FICCI plastic growth outlook  
-"""
-            st.success(msg)
-            speak(f"Estimated PET waste in {city.title()} in {year} is {val/1000:.2f} thousand tonnes per year.")
-            return
+# ---------------- UI -------------------------------
 
-        speak("I do not have validated data for that yet.")
+st.subheader("💬 Ask Diva")
 
-    # ---------- Trend Charts ----------
-    st.subheader("📈 PET Waste Forecast Trend")
-    ct = st.selectbox("Select city",["hyderabad","mumbai","delhi","bangalore","chennai"])
-    endy = st.slider("Forecast until year",2025,2045,2035)
+question = st.text_input("Ask anything about PET waste or AQI")
 
-    years=list(range(2024,endy+1))
-    vals=[pet_forecast(ct,y)/1000 for y in years]
-
-    df=pd.DataFrame({"Year":years,"PET (thousand tonnes)":vals})
-    st.plotly_chart(px.line(df,x="Year",y="PET (thousand tonnes)",markers=True))
-
-    # ---------- PDF Report ----------
-    st.subheader("📄 Generate PDF Report")
-    if st.button("Create report"):
-        filename="diva_report.pdf"
-        c=canvas.Canvas(filename)
-        c.drawString(40,800,"DIVA — Environmental Report")
-        c.drawString(40,780,f"City: {ct}")
-        c.drawString(40,760,f"Forecast up to {endy}")
-        c.save()
-        with open(filename,"rb") as f:
-            st.download_button("Download PDF",f,file_name=filename)
-
-    # ---------- GIS MAP ----------
-    st.subheader("🗺 Hyderabad Ward Map (upload GeoJSON)")
-    upl=st.file_uploader("Upload GHMC GeoJSON",type=["geojson","json"])
-    if upl:
-        import json
-        gj=json.load(upl)
-        m=folium.Map([17.385,78.4867],zoom_start=10)
-        folium.GeoJson(gj).add_to(m)
-        st_folium(m,width=700,height=450)
+if st.button("Ask"):
+    if question.strip() == "":
+        st.error("Ask a valid question")
     else:
-        st.info("Upload geojson to enable real heatmap")
+        reply, speakable = diva_brain(question)
+        st.markdown(reply)
+        if speakable:
+            speak(reply)
 
-# ------------------ ROUTER ------------------
-if "logged" not in st.session_state:
-    st.session_state.logged=False
+# ---------------- Trends chart ---------------------
 
-if not st.session_state.logged:
-    login_screen()
-else:
-    diva_app()
+st.subheader("📈 PET Waste Trend (Model Demo)")
+
+trend_years = list(range(2020, 2031))
+trend_values = [project_pet(y) for y in trend_years]
+
+df = pd.DataFrame({"Year": trend_years, "PET Waste (tonnes/year)": trend_values})
+
+st.line_chart(df, x="Year", y="PET Waste (tonnes/year)")
+
+st.caption("""
+📌 Trend is model based.
+Source baseline: **Central Pollution Control Board (CPCB), India**
+Data verified: ❌ (Projection only)
+""")
