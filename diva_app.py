@@ -5,8 +5,6 @@ from cryptography.fernet import Fernet
 import json
 import folium
 from streamlit_folium import st_folium
-import pyttsx3
-import speech_recognition as sr
 
 st.set_page_config(page_title="Diva – AI Environmental Assistant", layout="wide")
 
@@ -91,7 +89,8 @@ def speak(text):
 # --------- CHAT UI ---------
 st.subheader("💬 Ask Diva")
 
-mode = st.radio("Choose mode",["Text","Voice"])
+mode = st.radio("Choose mode",["Text"])
+
 
 if mode=="Text":
     q=st.text_input("Type your question")
