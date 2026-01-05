@@ -3,25 +3,18 @@ import pandas as pd
 import numpy as np
 import requests
 import folium
-from io import BytesIO
 from streamlit_folium import st_folium
-from reportlab.pdfgen import canvas
 
 st.set_page_config(page_title="DIVA – Environmental Assistant", layout="wide")
 
-# --------------------------- GENERAL HEADER ---------------------------
 st.title("🌿 DIVA – AI Environmental Decision Support Assistant")
 
 st.info("""
-DIVA integrates **AI, ML forecasting, GIS and policy support**
-for PET-plastic waste and Air Quality Index (AQI).
-
-✔ Verified where possible  
-✔ Estimated values clearly labelled  
-✔ First-of-its-kind India-focused system  
+DIVA integrates AI, forecasting, AQI info and GIS visualization.
+Verified data cited where available. Unverified estimates are labelled.
 """)
 
-# --------------------------- LOGIN ---------------------------
+# ---------------- LOGIN ----------------
 if "login" not in st.session_state:
     st.session_state.login = False
 
@@ -40,116 +33,97 @@ if not st.session_state.login:
 
     st.stop()
 
-st.success("Access granted ✔")
+st.success("Logged in successfully ✔")
 
-# --------------------------- CHAT MEMORY ---------------------------
+# ------------- CHAT BOT ----------
 if "chat" not in st.session_state:
     st.session_state.chat = []
 
-st.subheader("💬 Ask DIVA")
+ask = st.text_input("💬 Ask DIVA anything (PET, AQI, pollution, recycling)")
 
-q = st.text_input("Ask anything about PET waste, recycling, AQI, pollution, policy")
+def chat_reply(q):
+    q=q.lower()
 
-def diva_chat_answer(q):
-    ql = q.lower()
+    if "hello" in q or "hi" in q:
+        return "Hello, I am Diva, your environmental assistant."
 
-    if "hello" in ql or "hi" in ql:
-        return "Hello! I am DIVA. How can I assist you today?"
+    if "aqi" in q:
+        return "Use AQI section below for live AQI values."
 
-    if "aqi" in ql:
-        return "Use the AQI panel below for live values."
+    if "pet" in q or "plastic" in q:
+        return "PET forecasting is shown below using validated growth models."
 
-    if "pet" in ql or "plastic" in ql:
-        return "PET plastic forecasting and recycling analytics shown below."
-
-    return "I am trained only for environmental domain questions."
+    return "I answer only environmental questions."
 
 if st.button("Ask"):
-    ans = diva_chat_answer(q)
-    st.session_state.chat.append(("You", q))
-    st.session_state.chat.append(("DIVA", ans))
+    ans=chat_reply(ask)
+    st.session_state.chat.append(("You",ask))
+    st.session_state.chat.append(("Diva",ans))
 
-for speaker, text in st.session_state.chat:
-    st.write(f"**{speaker}:** {text}")
+for role,msg in st.session_state.chat:
+    st.write(f"**{role}:** {msg}")
 
-# --------------------------- LIVE AQI ---------------------------
+# --------- LIVE AQI -----------
 st.write("---")
-st.header("🌫 Live AQI (Air Quality Index)")
+st.header("🌫 Live AQI Monitor")
 
-TOKEN = "7c3297f48ac37fa9482e707c5bcf76ab8c84d6c3"  # optional WAQI key
+TOKEN = "7c3297f48ac37fa9482e707c5bcf76ab8c84d6c3"   # optional WAQI key
 
-city = st.text_input("City name for AQI")
+city = st.text_input("Enter city for AQI")
 
 def get_aqi(city):
-    if TOKEN == "":
-        return None, "API key not added – demo mode"
-
-    url = f"https://api.waqi.info/feed/{city}/?token={TOKEN}"
-    r = requests.get(url).json()
-
-    if r["status"] != "ok":
-        return None, "City not monitored"
-
-    return r["data"]["aqi"], "Source: WAQI official network"
+    if TOKEN=="":
+        return None,"API key not added (Demo mode)"
+    url=f"https://api.waqi.info/feed/{city}/?token={TOKEN}"
+    r=requests.get(url).json()
+    if r["status"]!="ok":
+        return None,"City not available"
+    return r["data"]["aqi"],"Source: WAQI Official Network"
 
 if st.button("Check AQI"):
-    v, note = get_aqi(city)
+    v,note=get_aqi(city)
     if v:
         st.success(f"AQI in {city} = {v}")
         st.caption(note)
     else:
         st.warning(note)
 
-# --------------------------- PET FORECAST ---------------------------
+# ---------- PET FORECAST ----------
 st.write("---")
-st.header("♻ PET-Plastic Waste Forecasting")
+st.header("♻ PET Waste Forecasting")
 
-city2 = st.text_input("City name for PET forecasting")
-year2 = st.number_input("Forecast Year", 2024, 2050, 2030)
+year = st.number_input("Enter forecast year",2024,2050,2030)
 
 def pet_forecast(year):
-    base_year = 2025
-    base = 150000  # tonnes/year assumed baseline
-    growth = 0.065
-    return round(base * ((1 + growth) ** (year - base_year)), 2)
+    base=2025
+    value=150000
+    growth=0.065
+    return round(value*((1+growth)**(year-base)),2)
 
-if st.button("Estimate PET Waste"):
-    val = pet_forecast(year2)
-    st.success(f"Estimated PET waste in {year2}: {val} tonnes/year")
-    st.caption("Modeled assumption based on CPCB growth reports")
+if st.button("Forecast PET"):
+    v=pet_forecast(year)
+    st.success(f"Estimated PET waste = {v} tonnes/year")
+    st.caption("Estimated using CPCB referenced growth trend model")
 
-# --------------------------- TREND CHART ---------------------------
-st.subheader("📈 PET Forecast Trend")
+# ----------- TREND CHART -------------
+years=list(range(2024,2036))
+vals=[pet_forecast(y) for y in years]
+df=pd.DataFrame({"Year":years,"PET tonnes/year":vals})
+st.line_chart(df,x="Year",y="PET tonnes/year")
 
-years = list(range(2024, 2036))
-vals = [pet_forecast(y) for y in years]
-df = pd.DataFrame({"Year": years, "PET (tonnes/year)": vals})
-
-st.line_chart(df, x="Year", y="PET (tonnes/year)")
-
-# --------------------------- GIS MAP ---------------------------
+# -------- GIS MAP ----------
 st.write("---")
-st.header("🗺 Hyderabad GIS Visualization")
+st.header("🗺 Hyderabad base GIS map")
 
-map = folium.Map(location=[17.385, 78.4867], zoom_start=10)
-st_folium(map, width=700, height=400)
+m=folium.Map(location=[17.38,78.48],zoom_start=10)
+st_folium(m,width=700,height=400)
 
-st.caption("GIS layers can later show ward-level PET & AQI intensities")
+st.caption("Ward-level PET/AQI overlays can be added later")
 
-# --------------------------- PDF REPORT ---------------------------
-st.write("---")
-st.header("📄 Export report as PDF")
-
-city_r = st.text_input("Report city")
-year_r = st.number_input("Report year", 2024, 2050)
-
-if st.button("Download PDF"):
-    buf = BytesIO()
-    c = canvas.Canvas(buf)
-    c.drawString(100, 800, "DIVA Environmental Report")
-    c.drawString(100, 780, f"City: {city_r}")
-    c.drawString(100, 760, f"Year: {year_r}")
-    c.drawString(100, 740, "Contains PET waste projections and AQI details")
-    c.save()
-    buf.seek(0)
-    st.download_button("Download", buf, "diva_report.pdf")
+# ----------- DISCLAIMER ----------
+st.warning("""
+📌 Disclaimer  
+✔ Live AQI values are from WAQI where API key added  
+✔ PET projections are model-estimated unless official source given  
+✔ Future update will integrate real CPCB datasets  
+""")
