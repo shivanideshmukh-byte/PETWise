@@ -1,7 +1,5 @@
 streamlit
 pandas
-speechrecognition
-pyttsx3
 cryptography
 folium
 streamlit-folium
