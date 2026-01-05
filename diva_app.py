@@ -2,10 +2,8 @@ import streamlit as st
 from cryptography.fernet import Fernet
 import json
 import pandas as pd
-
 import re
 import math
-
 from cryptography.fernet import Fernet
 
 st.set_page_config(page_title="Diva AI", layout="wide")
@@ -121,14 +119,13 @@ def main_app():
     st.sidebar.success(f"Logged in as {st.session_state['user']}")
     if st.sidebar.button("Logout"):
         st.session_state.clear()
-        st.experimental_rerun()
+        st.rerun()
+
 
     st.title("🌿 Diva – AI Environmental Assistant")
 
     user_question = st.text_input("Ask Diva anything about PET, waste, or AQI:")
 
-   import re
-import math
 
 def forecast_pet(year):
     base_year = 2025
