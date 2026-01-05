@@ -176,20 +176,11 @@ def answer_engine(q):
     # -----------------------------
     return "❌ I am domain-restricted. Diva answers only PET waste, plastic waste, recycling, and AQI questions."
 
-
 if st.button("Ask"):
-
     ans = answer_engine(user_question)
-
     st.write("🧠 Diva:", ans)
-
     tts(ans)
-
     add_chat(user_question + " -> " + ans)
-
-        st.write("🧠 Diva:", ans)
-        tts(ans)
-        add_chat(user_question + " -> " + ans)
 
     st.subheader("🗂 Encrypted chat history (local session)")
     for c in get_chats():
