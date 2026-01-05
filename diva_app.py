@@ -140,32 +140,33 @@ def forecast_pet(year):
     years = year - base_year
     return round(base_value * ((1 + growth_rate) ** years), 2)
 
+
 def answer_engine(q):
 
-    ql = q.lower()
+    q = q.lower()
 
-    # -----------------------------
-    # Identify year in question
-    # -----------------------------
-    year_match = re.findall(r"(20[2-5][0-9])", ql)
+    # find year in question
+    year_match = re.findall(r"(20\d{2})", q)
+    year = int(year_match[0]) if year_match else 2030
 
-    # -----------------------------
-    # PET / plastic forecast question
-    # -----------------------------
-    if any(k in ql for k in ["pet", "plastic", "waste"]):
+    # PET waste baseline + growth model
+    base_year = 2025
+    base_value = 145000   # tonnes per year (example baseline)
+    growth_rate = 0.065   # 6.5 %
 
-        if year_match:
-            y = int(year_match[0])
-            value = forecast_pet(y)
-            return f"Estimated PET waste in {y} is **{value:,} tonnes per year** (trend-based forecast)."
+    years_ahead = year - base_year
+    forecast_value = round(base_value * ((1 + growth_rate) ** years_ahead), 2)
 
-        if "why" in ql or "reason" in ql or "increase" in ql:
-            return "PET waste is increasing mainly due to population growth, urbanisation, lifestyle change, high packaging use, and limited recycling capacity."
+    answer = f"""
+    📌 **Projected PET waste in {year}:** **{forecast_value:,} tonnes/year**
 
-        if "current" in ql or "now" in ql:
-            return "Current PET waste generation in Hyderabad is approximately **145,000–160,000 tonnes/year** based on recent estimates."
+    🧮 Method:
+    • Baseline ({base_year}) = {base_value:,} tonnes  
+    • Growth rate = 6.5% annually  
+    • Model = baseline × (1+g)^years
+    """
 
-        return "This relates to PET/plastic waste. You can ask for a specific year forecast or ask why/how for an explanation."
+    return answer.strip()
 
     # -----------------------------
     # AQI questions
@@ -183,14 +184,23 @@ def answer_engine(q):
     return "❌ I am domain-restricted. Diva answers only PET waste, plastic waste, recycling, and AQI questions."
 
 if st.button("Ask"):
-    ans = answer_engine(user_question)
-    st.write("🧠 Diva:", ans)
-    tts(ans)
-    add_chat(user_question + " -> " + ans)
 
-    st.subheader("🗂 Encrypted chat history (local session)")
-    for c in get_chats():
-        st.write("🔒", c)
+    ans = answer_engine(user_question)
+
+    st.markdown("### 🎯 Diva says:")
+    st.success(ans)
+
+    # female voice output
+    try:
+        import pyttsx3
+        engine = pyttsx3.init()
+        engine.setProperty('rate', 155)
+        engine.setProperty('voice', engine.getProperty('voices')[1].id)
+        engine.say(ans)
+        engine.runAndWait()
+    except:
+        pass
+
 
 # -------------------------------------------------------------------------------------
 # 🚀 APP ROUTER
