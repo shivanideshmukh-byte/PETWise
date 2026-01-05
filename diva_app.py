@@ -1,43 +1,43 @@
 import streamlit as st
 import requests
 import re
-import json
-from math import ceil
 
-# ------------------ SESSION STATE -------------------
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+st.set_page_config(page_title="Diva AI", layout="wide")
+
+# ------------------- FIREBASE CONFIG -------------------
+
+FIREBASE_WEB_API_KEY = "AIzaSyAbS3SdyPNRSNaUov0n4MeWFHTpoxBc4jc"
 
 
-# ------------------ FIREBASE AUTH -------------------
-# 👉 paste your Firebase details below
-FIREBASE_API_KEY = "AIzaSyAbS3SdyPNRSNaUov0n4MeWFHTpoxBc4jc"
-
-SIGNUP_URL = f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_API_KEY}"
-LOGIN_URL  = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
-
+# ------------------- FIREBASE FUNCTIONS -------------------
 
 def firebase_signup(email, password):
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_WEB_API_KEY}"
     payload = {"email": email, "password": password, "returnSecureToken": True}
-    r = requests.post(SIGNUP_URL, data=payload)
-    return r.json()
+    return requests.post(url, json=payload).json()
 
 
 def firebase_login(email, password):
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_WEB_API_KEY}"
     payload = {"email": email, "password": password, "returnSecureToken": True}
-    r = requests.post(LOGIN_URL, data=payload)
-    return r.json()
+    return requests.post(url, json=payload).json()
 
 
-# ---------------- LOGIN PAGE ----------------
-def login_page():
+# ------------------- LOGIN WALL -------------------
 
-    st.title("🔐 Login / Sign Up")
+st.title("🌿 Diva — AI Environmental Decision Support Assistant")
+
+if "auth" not in st.session_state:
+    st.session_state["auth"] = False
+
+if not st.session_state["auth"]:
+
+    st.subheader("🔐 Login or Create Account")
 
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
 
-    action = st.radio("Action", ["Login", "Sign Up"])
+    action = st.radio("Action", ["Login", "Sign Up"], horizontal=True)
 
     if st.button("Confirm"):
 
@@ -47,120 +47,122 @@ def login_page():
             result = firebase_signup(email, password)
 
         if "idToken" in result:
-            st.session_state.logged_in = True
-            st.success("Logged in successfully")
+            st.success("Logged in successfully 🎉")
+            st.session_state["auth"] = True
+            st.session_state["user_email"] = email
+            st.experimental_rerun()
         else:
-            st.error(result.get("error", {}).get("message", "Failed"))
+            st.error(result.get("error", {}).get("message", "Unknown error"))
+
+    st.stop()
 
 
-# ---------------- PET FORECAST ENGINE ----------------
-def pet_forecast_answer(q):
+# ------------------- MAIN APP AFTER LOGIN -------------------
 
-    q = q.lower()
+st.success(f"Logged in as {st.session_state['user_email']} ✔")
 
-    # extract city
-    m = re.search(r"in ([a-zA-Z\s]+)", q)
-    city = m.group(1).strip().title() if m else "Hyderabad"
+st.header("♻ PET Waste & AQI Intelligence Assistant")
 
-    # extract year
-    year_match = re.findall(r"(20\d{2})", q)
-    year = int(year_match[0]) if year_match else 2030
 
-    # Model constants (placeholder CPCB-style baseline assumption)
+# ------------------- PET FORECAST MODEL -------------------
+
+def pet_forecast(city, year):
+
     base_year = 2025
     base_value = 145000  # tonnes/year baseline
-    growth_rate = 0.065  # 6.5% annual
+    growth_rate = 0.065  # 6.5%
 
-    years_ahead = year - base_year
-    forecast_value = round(base_value * ((1 + growth_rate) ** years_ahead), 2)
+    years_ahead = int(year) - base_year
+    value = round(base_value * ((1 + growth_rate) ** years_ahead), 2)
 
-    return f"""
-📍 **City:** {city}
-📅 **Year:** {year}
-
-♻ **Projected PET waste:**  
-👉 **{forecast_value:,} tonnes/year**
-
-📌 Model = Baseline ({base_year}) × (1 + 6.5%) ^ years
-"""
+    return value
 
 
-# ---------------- AQI LIVE API ----------------
-# optional — works only if user adds a free key
-AQI_API_KEY = "7c3297f48ac37fa9482e707c5bcf76ab8c84d6c3"   # << paste WAQI API key here
+# ------------------- AQI API (future-ready) -------------------
+
+AQI_API_KEY = "7c3297f48ac37fa9482e707c5bcf76ab8c84d6c3"  # optional
 
 def get_aqi(city):
 
     if AQI_API_KEY == "":
-        return "🔌 Live AQI will be enabled after API key integration."
+        return "🔜 Live AQI will be added when API key is enabled."
 
     url = f"https://api.waqi.info/feed/{city}/?token={AQI_API_KEY}"
-    d = requests.get(url).json()
+    r = requests.get(url).json()
 
-    if d["status"] != "ok":
+    if r["status"] != "ok":
         return "AQI not available"
 
-    aqi = d["data"]["aqi"]
-    return f"🌫 Current AQI in {city} = **{aqi}**"
+    return r["data"]["aqi"]
 
 
-# ---------------- GIS MAP (Hyderabad demo) ----------------
-def show_hyd_map():
+# ------------------- VOICE (female speech synthesis) -------------------
 
-    st.subheader("🗺 Hyderabad PET & AQI Zones (demo map)")
-
-    st.map(
-        data = {
-            "lat": [17.3850, 17.4500, 17.3000],
-            "lon": [78.4867, 78.5000, 78.4000],
-        },
-        zoom=10
-    )
-
-    st.info("This is demo GIS layer. Live CPCB shapefiles can be added later.")
-
-
-# ---------------- ASSISTANT APP ----------------
-def diva_app():
-
-    st.title("🌿 Diva — AI Environmental Decision Support Assistant")
-
-    # input mode
-    mode = st.radio("Ask via:", ["Typing"], horizontal=True)
-
-    q = st.text_input("Your question")
-
-    if st.button("Ask Diva"):
-
-        ans = pet_forecast_answer(q)
-
-        st.success(ans)
-
-        st.markdown("""
-<script>
-var u=new SpeechSynthesisUtterance(`Diva says """ + ans + """`);
-u.pitch=1.3; u.rate=1.0;
-u.voice=speechSynthesis.getVoices().find(v=>v.name.toLowerCase().includes("female"))
-      || speechSynthesis.getVoices()[0];
-speechSynthesis.speak(u);
-</script>
-""", unsafe_allow_html=True)
-
-    st.divider()
-    st.subheader("🌍 Live AQI (India cities)")
-
-    city = st.text_input("City name for AQI lookup")
-    if st.button("Check AQI"):
-        st.info(get_aqi(city))
-
-    st.divider()
-    show_hyd_map()
-
-    st.caption("🇮🇳 India scope ready • APIs and CPCB verified datasets can be plugged in")
+def speak(text):
+    st.components.v1.html(f"""
+    <script>
+    var msg = new SpeechSynthesisUtterance("{text}");
+    msg.pitch = 1;
+    msg.rate = 1;
+    msg.voice = speechSynthesis.getVoices().find(v => v.name.toLowerCase().includes("female")) 
+                 || speechSynthesis.getVoices()[0];
+    speechSynthesis.speak(msg);
+    </script>
+    """, height=0)
 
 
-# ---------------- ROUTER ----------------
-if not st.session_state.logged_in:
-    login_page()
-else:
-    diva_app()
+# ------------------- USER QUESTION ENGINE -------------------
+
+def answer_engine(question):
+
+    q = question.lower()
+    year_match = re.findall(r"(20\\d{{2}})", q)
+    year = int(year_match[0]) if year_match else 2030
+
+    # city extraction lightweight
+    city = "Hyderabad"
+    for c in ["hyderabad", "mumbai", "delhi", "chennai", "kolkata", "pune", "bangalore"]:
+        if c in q:
+            city = c.capitalize()
+
+    waste = pet_forecast(city, year)
+
+    return city, year, waste
+
+
+# ------------------- UI -------------------
+
+ask_mode = st.radio("Ask via:", ["Typing"], horizontal=True)
+
+question = st.text_input("Your question")
+
+if st.button("Ask Diva") and question:
+
+    city, year, waste_val = answer_engine(question)
+
+    st.success(f"""
+    📍 **City:** {city}  
+    📆 **Year:** {year}  
+    ♻ **Projected PET Waste:** {waste_val:,} tonnes/year
+    """)
+
+    speak(f"Projected pet waste in {city} in {year} is {waste_val} tonnes per year")
+
+
+# ------------------- AQI CHECK -------------------
+
+st.subheader("🌫 Check Current AQI (demo readiness)")
+
+city_input = st.text_input("Enter city to check AQI")
+
+if st.button("Check AQI"):
+
+    result = get_aqi(city_input.lower())
+    st.info(f"Current AQI in {city_input} = {result}")
+
+
+# ------------------- MAP DEMO -------------------
+
+st.subheader("🗺 Hyderabad PET & AQI Zones (demo map)")
+
+st.map()
