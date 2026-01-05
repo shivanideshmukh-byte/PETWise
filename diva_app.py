@@ -50,7 +50,7 @@ if not st.session_state["auth"]:
             st.success("Logged in successfully 🎉")
             st.session_state["auth"] = True
             st.session_state["user_email"] = email
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error(result.get("error", {}).get("message", "Unknown error"))
 
